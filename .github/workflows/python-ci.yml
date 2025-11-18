@@ -1,4 +1,4 @@
-name: PyTorch CI for SimpleNN
+name: PyTorch CI/CD for SimpleNN
 
 on:
   push:
@@ -26,3 +26,43 @@ jobs:
 
       - name: Run tests
         run: pytest -q
+
+  cd:
+    # Only run CD if CI passed
+    needs: ci
+
+    # And only on push to main (no deploy on PR)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Train model and save artifact
+        run: |
+          python - << 'EOF'
+          import torch
+          from simple_nn import train_xor
+
+          model, loss = train_xor(num_epochs=80, lr=0.1)
+          print(f"Final loss in deploy step: {loss}")
+          torch.save(model.state_dict(), "model.pt")
+          EOF
+
+      - name: Upload model artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: simple-nn-model
+          path: model.pt
